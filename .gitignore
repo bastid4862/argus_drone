@@ -2,7 +2,12 @@ build/
 install/
 log/
 
+cmake-build-*/
+
 *.pyc
 __pycache__/
+
 .vscode/
 .idea/
+
+clion_env.sh

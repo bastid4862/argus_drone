@@ -23,4 +23,19 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+find_package(rclcpp REQUIRED)
+find_package(cave_drone_interfaces REQUIRED)
+
+add_executable(sf45_node src/sf45_node.cpp)
+
+ament_target_dependencies(sf45_node
+        rclcpp
+        cave_drone_interfaces
+)
+
+install(TARGETS
+        sf45_node
+        DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()
