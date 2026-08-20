@@ -2,7 +2,7 @@
 #include "cave_drone_interfaces/msg/sf45_measurement.hpp"
 #include <chrono>
 
-// Linux serial port tools 🔌
+// Linux serial port tools
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -315,6 +315,7 @@ private:
 
                 msg.distance = distance_m;
                 msg.internal_scan_angle = angle_deg;
+                msg.timestamp = this->now();
 
                 // Send the measurement
                 publisher_->publish(msg);
