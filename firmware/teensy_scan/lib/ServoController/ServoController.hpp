@@ -15,6 +15,8 @@ public:
     // Function to command the motor to a specific position
     void setAngle(float angle);
 
+    void stop();
+
 private:
     uint8_t servo_pin_;
     Servo my_servo_;

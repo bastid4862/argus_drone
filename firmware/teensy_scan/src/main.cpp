@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "Encoder.hpp"
 #include "ServoController.hpp"
+#include "ScanController.hpp"
 
 #include <micro_ros_arduino.h>
 #include <rcl/rcl.h>
@@ -14,19 +15,14 @@ Encoder myEncoder(10);
 // Servo signal pin
 ServoController myServo(23);
 
+ScanController myScanner(myServo, myEncoder);
+
 // micro-ROS objects
 rcl_publisher_t publisher;
 std_msgs__msg__Float32 msg;
 rclc_support_t support;
 rcl_allocator_t allocator;
 rcl_node_t node;
-
-bool hasFault = false;
-
-bool isSafe(float requestedAngle, float measuredAngle);
-
-void clearFault();
-
 
 void setup() {
     // Run the hardware setup we wrote in Encoder.cpp
@@ -51,62 +47,18 @@ void setup() {
 }
 
 void loop() {
-    if (hasFault) {
+
+    // Check if system has a fault before running
+    if (myScanner.hasFault()) {
         return;
     }
 
-    // Sweep UP from 0 to 180 degrees
-    for (int pos = 0; pos <= 180; pos++) {
-        myServo.setAngle(pos);
+    // Execute state logic for active ScanMode
+    myScanner.update();
 
-        float measuredAngle = myEncoder.readAngle();
+    // Read current position and publish over micro-ROS
+    msg.data = myEncoder.readAngle();
+    rcl_publish(&publisher, &msg, NULL);
 
-        if (!isSafe(pos, measuredAngle)) {
-            return;
-        }
-
-        msg.data = measuredAngle;
-        rcl_publish(&publisher, &msg, NULL); // Publish live angle
-        delay(15);
-    }
-
-    // Sweep DOWN from 180 to 0 degrees
-    for (int pos = 180; pos >= 0; pos--) {
-        myServo.setAngle(pos);
-
-        float measuredAngle = myEncoder.readAngle();
-
-        if (!isSafe(pos, measuredAngle)) {
-            return;
-        }
-
-        msg.data = measuredAngle;
-        rcl_publish(&publisher, &msg, NULL); // Publish live angle
-        delay(15);
-    }
-}
-
-
-bool isSafe(float requestedAngle, float measuredAngle) {
-    bool safe = true;
-
-    // Check mechanical limits
-    if ((requestedAngle < 0) || (requestedAngle > 180)) {
-        hasFault = true;
-        myServo.stop();
-        safe = false;
-    }
-
-    // Check position error
-    if (fabs(requestedAngle - measuredAngle) > 15.0f) {
-        hasFault = true;
-        myServo.stop();
-        safe = false;
-    }
-
-    return safe;
-}
-
-void clearFault() {
-    hasFault = false;
+    delay(15);
 }
