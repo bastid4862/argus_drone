@@ -9,6 +9,7 @@
 #include <std_msgs/msg/float32.h>
 #include <std_msgs/msg/empty.h>
 #include <rclc/executor.h>
+#include <rmw_microros/rmw_microros.h>
 
 #include <cmath>
 
@@ -47,6 +48,11 @@ void setup() {
     set_microros_serial_transports(Serial);
 
     delay(2000);
+
+    // Wait until the micro-ROS Agent is available
+    while (rmw_uros_ping_agent(100, 1) != RMW_RET_OK) {
+        delay(100);
+    }
 
     allocator = rcl_get_default_allocator();
     rclc_support_init(&support, 0, NULL, &allocator);
