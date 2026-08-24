@@ -7,6 +7,8 @@
 #include <rclc/rclc.h>
 #include <std_msgs/msg/float32.h>
 
+#include <cmath>
+
 // Use Pin 10 as our CS (Chip Select) wire.
 Encoder myEncoder(10);
 // Servo signal pin
@@ -19,6 +21,11 @@ rclc_support_t support;
 rcl_allocator_t allocator;
 rcl_node_t node;
 
+bool hasFault = false;
+
+bool isSafe(float requestedAngle, float measuredAngle);
+
+void clearFault();
 
 
 void setup() {
@@ -44,10 +51,21 @@ void setup() {
 }
 
 void loop() {
+    if (hasFault) {
+        return;
+    }
+
     // Sweep UP from 0 to 180 degrees
     for (int pos = 0; pos <= 180; pos++) {
         myServo.setAngle(pos);
-        msg.data = myEncoder.readAngle();
+
+        float measuredAngle = myEncoder.readAngle();
+
+        if (!isSafe(pos, measuredAngle)) {
+            return;
+        }
+
+        msg.data = measuredAngle;
         rcl_publish(&publisher, &msg, NULL); // Publish live angle
         delay(15);
     }
@@ -55,8 +73,40 @@ void loop() {
     // Sweep DOWN from 180 to 0 degrees
     for (int pos = 180; pos >= 0; pos--) {
         myServo.setAngle(pos);
-        msg.data = myEncoder.readAngle();
+
+        float measuredAngle = myEncoder.readAngle();
+
+        if (!isSafe(pos, measuredAngle)) {
+            return;
+        }
+
+        msg.data = measuredAngle;
         rcl_publish(&publisher, &msg, NULL); // Publish live angle
         delay(15);
     }
+}
+
+
+bool isSafe(float requestedAngle, float measuredAngle) {
+    bool safe = true;
+
+    // Check mechanical limits
+    if ((requestedAngle < 0) || (requestedAngle > 180)) {
+        hasFault = true;
+        myServo.stop();
+        safe = false;
+    }
+
+    // Check position error
+    if (fabs(requestedAngle - measuredAngle) > 15.0f) {
+        hasFault = true;
+        myServo.stop();
+        safe = false;
+    }
+
+    return safe;
+}
+
+void clearFault() {
+    hasFault = false;
 }
