@@ -51,11 +51,12 @@ void ScanController::update() {
         case ScanMode::HOME:
             if (currentAngle_ > minAngle_) {
                 currentAngle_ -= stepSize_;
-                if (currentAngle_ <= minAngle_) {
-                    currentAngle_ = minAngle_;
-                    currentMode_ = ScanMode::HOLD;
-                }
             }
+            if (currentAngle_ <= minAngle_) {
+                currentAngle_ = minAngle_;
+                currentMode_ = ScanMode::HOLD;
+            }
+            
             break;
 
         case ScanMode::HOLD:
@@ -103,4 +104,10 @@ void ScanController::update() {
 
     }
     servo_.setAngle(currentAngle_);
+}
+
+void ScanController::clearFault() {
+    hasFault_ = false;
+    currentAngle_ = encoder_.readAngle();
+    currentMode_ = ScanMode::HOME;
 }

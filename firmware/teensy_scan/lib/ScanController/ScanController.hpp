@@ -40,5 +40,6 @@ class ScanController {
         void setMode(ScanMode mode);
         void update();
         void setTargetAngle(float angle);
+        void clearFault();
 };
 
