@@ -1,0 +1,4 @@
+float32 min_angle
+float32 max_angle
+float32 speed
+int8 direction

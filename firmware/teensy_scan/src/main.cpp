@@ -13,6 +13,8 @@
 
 #include <cmath>
 
+#include <cave_drone_interfaces/msg/sweep_command.h>
+
 // Use Pin 10 as our CS (Chip Select) wire.
 Encoder myEncoder(10);
 // Servo signal pin
@@ -36,13 +38,20 @@ std_msgs__msg__Empty home_msg;
 rcl_subscription_t stop_sub;
 std_msgs__msg__Empty stop_msg;
 
+rcl_subscription_t sweep_sub;
+cave_drone_interfaces__msg__SweepCommand sweep_msg;
+
 rclc_support_t support;
 rcl_allocator_t allocator;
 rcl_node_t node;
 
 rclc_executor_t executor;
 
+int publish_fail_count = 0;
+
 void reset_callback(const void * msgin) {
+    (void)msgin;
+
     // Clear the fault state and return to HOME mode
     myScanner.clearFault();
 }
@@ -65,6 +74,24 @@ void stop_callback(const void * msgin) {
     (void)msgin;
 
     myScanner.setMode(ScanMode::STOPPED);
+}
+
+void sweep_callback(const void * msgin) {
+    const cave_drone_interfaces__msg__SweepCommand * msg =
+        static_cast<const cave_drone_interfaces__msg__SweepCommand *>(msgin);
+
+    bool valid = myScanner.configureSweep(
+        msg->min_angle,
+        msg->max_angle,
+        msg->speed,
+        msg->direction
+    );
+
+    if (!valid) {
+        return;
+    }
+
+    myScanner.setMode(ScanMode::SWEEP);
 }
 
 void setup() {
@@ -95,8 +122,8 @@ void setup() {
         "encoder_angle"
     );
 
-    // Initialize executor with capacity for 4 callbacks
-    rclc_executor_init(&executor, &support.context, 4, &allocator);
+    // Initialize executor with capacity for 5 callbacks
+    rclc_executor_init(&executor, &support.context, 5, &allocator);
 
     // Initialize the subscriber on topic "reset_fault"
     rclc_subscription_init_default(
@@ -166,6 +193,27 @@ void setup() {
         ON_NEW_DATA
     );
 
+    // Create subscriber for sweep commands from the Jetson
+    rclc_subscription_init_default(
+        &sweep_sub,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(
+            cave_drone_interfaces,
+            msg,
+            SweepCommand
+        ),
+        "sweep"
+    );
+
+    // Add the sweep subscriber to the executor
+    rclc_executor_add_subscription(
+        &executor,
+        &sweep_sub,
+        &sweep_msg,
+        &sweep_callback,
+        ON_NEW_DATA
+    );
+
 
 }
 
@@ -175,6 +223,8 @@ void loop() {
 
     // Check if system has a fault before running
     if (myScanner.hasFault()) {
+        myScanner.setMode(ScanMode::STOPPED);
+        myScanner.update();
         return;
     }
 
@@ -183,7 +233,18 @@ void loop() {
 
     // Read current position and publish over micro-ROS
     msg.data = myEncoder.readAngle();
-    rcl_publish(&publisher, &msg, NULL);
+    rcl_ret_t publish_result = rcl_publish(&publisher, &msg, NULL);
+
+    if (publish_result != RCL_RET_OK) {
+        publish_fail_count++;
+    }
+    else {
+        publish_fail_count = 0;
+    }
+
+    if (publish_fail_count >= 10) {
+        myScanner.setFault();
+    }
 
     delay(15);
 }
