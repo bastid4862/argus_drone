@@ -6,8 +6,11 @@
 #include <micro_ros_platformio.h>
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
+
 #include <std_msgs/msg/float32.h>
 #include <std_msgs/msg/empty.h>
+#include <std_msgs/msg/int8.h>
+
 #include <rclc/executor.h>
 #include <rmw_microros/rmw_microros.h>
 
@@ -47,7 +50,14 @@ rcl_node_t node;
 
 rclc_executor_t executor;
 
-int publish_fail_count = 0;
+// ROS 2 publisher for scan mode
+rcl_publisher_t scan_mode_publisher;
+
+// Message that stores the current scan mode number
+std_msgs__msg__Int8 scan_mode_msg;
+
+int encoder_publish_fail_count = 0;
+int scan_mode_publish_fail_count = 0;
 
 void reset_callback(const void * msgin) {
     (void)msgin;
@@ -214,7 +224,12 @@ void setup() {
         ON_NEW_DATA
     );
 
-
+    rclc_publisher_init_default(
+        &scan_mode_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "scan_mode"
+    );
 }
 
 void loop() {
@@ -225,24 +240,41 @@ void loop() {
     if (myScanner.hasFault()) {
         myScanner.setMode(ScanMode::STOPPED);
         myScanner.update();
-        return;
+    }
+    else {
+        // Execute state logic for active ScanMode
+        myScanner.update();
     }
 
-    // Execute state logic for active ScanMode
-    myScanner.update();
+    // Get the current scan mode as a number
+    scan_mode_msg.data = static_cast<int8_t>(myScanner.getMode());
+
+    // Publish the current scan mode to ROS 2
+    rcl_ret_t scan_mode_result = rcl_publish(&scan_mode_publisher, &scan_mode_msg, NULL);
 
     // Read current position and publish over micro-ROS
     msg.data = myEncoder.readAngle();
     rcl_ret_t publish_result = rcl_publish(&publisher, &msg, NULL);
 
     if (publish_result != RCL_RET_OK) {
-        publish_fail_count++;
+        encoder_publish_fail_count++;
     }
     else {
-        publish_fail_count = 0;
+        encoder_publish_fail_count = 0;
     }
 
-    if (publish_fail_count >= 10) {
+    if (encoder_publish_fail_count >= 10) {
+        myScanner.setFault();
+    }
+
+    if (scan_mode_result != RCL_RET_OK) {
+        scan_mode_publish_fail_count++;
+    }
+    else {
+        scan_mode_publish_fail_count = 0;
+    }
+
+    if (scan_mode_publish_fail_count >= 10) {
         myScanner.setFault();
     }
 
