@@ -3,7 +3,7 @@
 <package format="3">
   <name>cave_drone_interfaces</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Custom ROS 2 messages and services for the cave-mapping drone.</description>
   <maintainer email="bastid486@todo.todo">bastid486</maintainer>
   <license>TODO: License declaration</license>
 

@@ -34,8 +34,6 @@ class ScanController {
 
         unsigned long lastUpdateTime_ = 0;
 
-        float getTargetAngle() const { return targetAngle_; }
-
         float homeAngle_ = 0.0f;
 
         float mechanicalMin_ = 0.0f;
@@ -55,5 +53,14 @@ class ScanController {
         void setSweepDirection(int8_t direction);
         bool configureSweep(float min_angle, float max_angle, float speed, int8_t direction);
         void setFault();
+
+        float getTargetAngle() const {
+            return targetAngle_;
+        }
+
+        int8_t getSweepDirection() const {
+            return sweepDirection_;
+        }
+
 };
 

@@ -29,6 +29,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
         "msg/Sf45Measurement.msg"
         "msg/SweepCommand.msg"
+        "msg/ScanHeadState.msg"
         "srv/SetAngle.srv"
         "srv/Sweep.srv"
         DEPENDENCIES builtin_interfaces

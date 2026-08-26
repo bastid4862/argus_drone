@@ -10,6 +10,7 @@
 #include <std_msgs/msg/float32.h>
 #include <std_msgs/msg/empty.h>
 #include <std_msgs/msg/int8.h>
+#include <std_msgs/msg/bool.h>
 
 #include <rclc/executor.h>
 #include <rmw_microros/rmw_microros.h>
@@ -56,8 +57,23 @@ rcl_publisher_t scan_mode_publisher;
 // Message that stores the current scan mode number
 std_msgs__msg__Int8 scan_mode_msg;
 
+// Target Angle variables
+rcl_publisher_t target_angle_publisher;
+std_msgs__msg__Float32 target_angle_msg;
+
+// Fault variables
+rcl_publisher_t fault_publisher;
+std_msgs__msg__Bool fault_msg;
+
+// Direction variables
+rcl_publisher_t sweep_direction_publisher;
+std_msgs__msg__Int8 sweep_direction_msg;
+
 int encoder_publish_fail_count = 0;
 int scan_mode_publish_fail_count = 0;
+int target_angle_publish_fail_count = 0;
+int fault_publish_fail_count = 0;
+int sweep_direction_publish_fail_count = 0;
 
 void reset_callback(const void * msgin) {
     (void)msgin;
@@ -230,6 +246,27 @@ void setup() {
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
         "scan_mode"
     );
+
+    rclc_publisher_init_default(
+        &target_angle_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
+        "target_angle"
+    );
+
+    rclc_publisher_init_default(
+        &fault_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),
+        "fault"
+    );
+
+    rclc_publisher_init_default(
+        &sweep_direction_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "sweep_direction"
+        );
 }
 
 void loop() {
@@ -256,6 +293,24 @@ void loop() {
     msg.data = myEncoder.readAngle();
     rcl_ret_t publish_result = rcl_publish(&publisher, &msg, NULL);
 
+    // Get the current target angle from ScanController
+    target_angle_msg.data = myScanner.getTargetAngle();
+
+    // Publish it to /target_angle
+    rcl_ret_t target_angle_publish_result = rcl_publish(&target_angle_publisher, &target_angle_msg, NULL);
+
+    // Get the fault notification from ScanController
+    fault_msg.data = myScanner.hasFault();
+
+    // Get the sweep direction from ScanController
+    sweep_direction_msg.data = myScanner.getSweepDirection();
+
+    // Publish it to /fault
+    rcl_ret_t fault_publish_result = rcl_publish(&fault_publisher, &fault_msg, NULL);
+
+    // Publish sweep direction to /sweep_direction
+    rcl_ret_t sweep_direction_publish_result = rcl_publish(&sweep_direction_publisher, &sweep_direction_msg, NULL);
+
     if (publish_result != RCL_RET_OK) {
         encoder_publish_fail_count++;
     }
@@ -275,6 +330,39 @@ void loop() {
     }
 
     if (scan_mode_publish_fail_count >= 10) {
+        myScanner.setFault();
+    }
+
+    if (target_angle_publish_result != RCL_RET_OK) {
+        target_angle_publish_fail_count++;
+    }
+    else {
+        target_angle_publish_fail_count = 0;
+    }
+
+    if (target_angle_publish_fail_count >= 10) {
+        myScanner.setFault();
+    }
+
+    if (fault_publish_result != RCL_RET_OK) {
+        fault_publish_fail_count++;
+    }
+    else {
+        fault_publish_fail_count = 0;
+    }
+
+    if (fault_publish_fail_count >= 10) {
+        myScanner.setFault();
+    }
+
+    if (sweep_direction_publish_result != RCL_RET_OK) {
+        sweep_direction_publish_fail_count++;
+    }
+    else {
+        sweep_direction_publish_fail_count = 0;
+    }
+
+    if (sweep_direction_publish_fail_count >= 10) {
         myScanner.setFault();
     }
 

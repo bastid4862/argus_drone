@@ -1,25 +1,35 @@
 #include <memory>
 #include <functional>
+#include <chrono>
 
 #include "rclcpp/rclcpp.hpp"
 
 #include "std_msgs/msg/float32.hpp"
 #include "std_msgs/msg/int8.hpp"
 #include "std_msgs/msg/empty.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 #include "cave_drone_interfaces/msg/sweep_command.hpp"
 #include "cave_drone_interfaces/srv/set_angle.hpp"
 
 #include <cstdint>
 
-#include "../../../build/cave_drone_interfaces/rosidl_generator_cpp/cave_drone_interfaces/srv/detail/set_angle__struct.hpp"
-#include "../../../build/cave_drone_interfaces/rosidl_typesupport_fastrtps_cpp/cave_drone_interfaces/msg/detail/sweep_command__rosidl_typesupport_fastrtps_cpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
 #include "cave_drone_interfaces/srv/sweep.hpp"
+#include "cave_drone_interfaces/msg/scan_head_state.hpp"
 
 class ScanHeadBridgeNode : public rclcpp::Node {
 public:
     ScanHeadBridgeNode() : Node("scan_head_bridge") {
+
+        //Timer:
+        timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(50),
+            std::bind(&ScanHeadBridgeNode::publish_scan_head_state,
+                this
+                )
+                );
+
         // Publishers:
 
         // Send target angle commands to the Teensy
@@ -79,6 +89,40 @@ public:
                     )
                 );
 
+        // Receives target angle from Teensy
+        target_angle_sub_ = this -> create_subscription<std_msgs::msg::Float32>(
+            "/target_angle",
+            10,
+            std::bind(
+                &ScanHeadBridgeNode::target_angle_callback,
+                this,
+                std::placeholders::_1
+            )
+        );
+
+        // Receives fault status from Teensy
+        fault_sub_ = this -> create_subscription<std_msgs::msg::Bool>(
+            "/fault",
+            10,
+            std::bind(
+                &ScanHeadBridgeNode::fault_callback,
+                this,
+                std::placeholders::_1
+            )
+        );
+
+        sweep_direction_sub_ = this -> create_subscription<std_msgs::msg::Int8>(
+            "/sweep_direction",
+            10,
+            std::bind(
+                &ScanHeadBridgeNode::sweep_direction_callback,
+                this,
+                std::placeholders::_1
+            )
+        );
+
+        // Services
+
         // HOME service
         home_service_ = this->create_service<std_srvs::srv::Trigger>(
             "/scan_head/home",
@@ -134,17 +178,13 @@ public:
             )
         );
 
-        // Higher-Level Encoder Status Publisher
-        encoder_angle_pub_ = this -> create_publisher<std_msgs::msg::Float32>(
-            "/scan_head/encoder_angle",
+        // ScanHeadState Publisher
+        scan_head_state_pub_ = this -> create_publisher<cave_drone_interfaces::msg::ScanHeadState>(
+            "/scan_head/state",
             10
         );
 
-        // Higher-Level Mode Publisher
-        mode_pub_ = this -> create_publisher<std_msgs::msg::Int8>(
-            "/scan_head/mode",
-            10
-        );
+
     }
 
     void publish_set_angle(float angle_value) {
@@ -199,10 +239,26 @@ public:
         reset_fault_pub_->publish(msg);
     }
 
+    void publish_scan_head_state() {
+        cave_drone_interfaces::msg::ScanHeadState msg;
+
+        msg.encoder_angle = latest_encoder_angle_;
+        msg.target_angle = latest_target_angle_;
+        msg.mode = latest_scan_mode_;
+        msg.fault = latest_fault_;
+        msg.sweep_direction = latest_sweep_direction_;
+        msg.stamp = this->now();
+
+        scan_head_state_pub_ -> publish(msg);
+    }
+
 private:
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr encoder_angle_sub_;
     rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr scan_mode_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr target_angle_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr fault_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr sweep_direction_sub_;
 
     // Publishers
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr set_angle_pub_;
@@ -210,10 +266,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr stop_pub_;
     rclcpp::Publisher<cave_drone_interfaces::msg::SweepCommand>::SharedPtr sweep_pub_;
     rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr reset_fault_pub_;
-
-    // Higher-level Publishers
-    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr encoder_angle_pub_;
-    rclcpp::Publisher<std_msgs::msg::Int8>::SharedPtr mode_pub_;
+    rclcpp::Publisher<cave_drone_interfaces::msg::ScanHeadState>::SharedPtr scan_head_state_pub_;
 
     // Service
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr home_service_;
@@ -222,17 +275,21 @@ private:
     rclcpp::Service<cave_drone_interfaces::srv::SetAngle>::SharedPtr set_angle_srv_;
     rclcpp::Service<cave_drone_interfaces::srv::Sweep>::SharedPtr sweep_service_;
 
+    // Timer
+    rclcpp::TimerBase::SharedPtr timer_;
+
     // Teensy States
     float latest_encoder_angle_ = 0.0f; // stores angle
+    float latest_target_angle_ = 0.0f;  // stores target angle
     int8_t latest_scan_mode_ = 0; // stores mode number
+    int8_t latest_sweep_direction_ = 1;
+    bool latest_fault_ = false;
 
     // Callbacks
     void encoder_angle_callback(
         const std_msgs::msg::Float32::SharedPtr msg) {
         // Save latest encoder angle
         latest_encoder_angle_ = msg->data;
-        // Republish the encoder angle as higher-level scan head status
-        encoder_angle_pub_->publish(*msg);
     }
 
 
@@ -240,8 +297,6 @@ private:
         const std_msgs::msg::Int8::SharedPtr msg) {
         // Save latest scan mode
         latest_scan_mode_ = msg->data;
-        // Republish the mode as higher-level scan head status
-        mode_pub_->publish(*msg);
     }
 
     void home_service_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
@@ -301,6 +356,21 @@ private:
         // Tell the caller the command was sent
         response->success = true;
         response->message = "Sweep command sent";
+    }
+
+    void target_angle_callback(const std_msgs::msg::Float32::SharedPtr msg) {
+        latest_target_angle_ = msg->data;
+
+    }
+
+    void fault_callback(const std_msgs::msg::Bool::SharedPtr msg) {
+        latest_fault_ = msg->data;
+
+    }
+
+    void sweep_direction_callback(const std_msgs::msg::Int8::SharedPtr msg) {
+        latest_sweep_direction_ = msg->data;
+
     }
 };
 
