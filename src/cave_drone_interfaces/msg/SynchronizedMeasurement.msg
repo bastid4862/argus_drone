@@ -1,0 +1,4 @@
+float32 distance
+float32 internal_scan_angle
+float32 external_angle
+builtin_interfaces/Time timestamp

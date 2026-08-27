@@ -19,6 +19,9 @@
 
 #include <cave_drone_interfaces/msg/sweep_command.h>
 
+// Custom message for encoder angle and timestamp
+#include <cave_drone_interfaces/msg/encoder_measurement.h>
+
 // Use Pin 10 as our CS (Chip Select) wire.
 Encoder myEncoder(10);
 // Servo signal pin
@@ -28,7 +31,9 @@ ScanController myScanner(myServo, myEncoder);
 
 // micro-ROS objects
 rcl_publisher_t publisher;
-std_msgs__msg__Float32 msg;
+
+// Stores the encoder angle and timestamp
+cave_drone_interfaces__msg__EncoderMeasurement encoder_msg;
 
 rcl_subscription_t reset_sub;
 std_msgs__msg__Empty reset_msg;
@@ -75,36 +80,36 @@ int target_angle_publish_fail_count = 0;
 int fault_publish_fail_count = 0;
 int sweep_direction_publish_fail_count = 0;
 
-void reset_callback(const void * msgin) {
-    (void)msgin;
+void reset_callback(const void *msgin) {
+    (void) msgin;
 
     // Clear the fault state and return to HOME mode
     myScanner.clearFault();
 }
 
 // Takes a new angle, takes that number, and then switches scanner to POSITION mode
-void set_angle_callback(const void * msgin) {
-    const std_msgs__msg__Float32 * msg =
-        static_cast<const std_msgs__msg__Float32 *>(msgin);
+void set_angle_callback(const void *msgin) {
+    const std_msgs__msg__Float32 *msg =
+            static_cast<const std_msgs__msg__Float32 *>(msgin);
 
     myScanner.setTargetAngle(msg->data);
     myScanner.setMode(ScanMode::POSITION);
 }
 
-void home_callback(const void * msgin) {
-    (void)msgin;  // We dont need any data from an empty message
+void home_callback(const void *msgin) {
+    (void) msgin; // We dont need any data from an empty message
     myScanner.setMode(ScanMode::HOME);
 }
 
-void stop_callback(const void * msgin) {
-    (void)msgin;
+void stop_callback(const void *msgin) {
+    (void) msgin;
 
     myScanner.setMode(ScanMode::STOPPED);
 }
 
-void sweep_callback(const void * msgin) {
-    const cave_drone_interfaces__msg__SweepCommand * msg =
-        static_cast<const cave_drone_interfaces__msg__SweepCommand *>(msgin);
+void sweep_callback(const void *msgin) {
+    const cave_drone_interfaces__msg__SweepCommand *msg =
+            static_cast<const cave_drone_interfaces__msg__SweepCommand *>(msgin);
 
     bool valid = myScanner.configureSweep(
         msg->min_angle,
@@ -136,6 +141,9 @@ void setup() {
         delay(100);
     }
 
+    // Synchronize Teensy time with the micro-ROS Agent
+    rmw_uros_sync_session(1000);
+
     allocator = rcl_get_default_allocator();
     rclc_support_init(&support, 0, NULL, &allocator);
     rclc_node_init_default(&node, "teensy_encoder_node", "", &support);
@@ -144,7 +152,7 @@ void setup() {
     rclc_publisher_init_default(
         &publisher,
         &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
+        ROSIDL_GET_MSG_TYPE_SUPPORT(cave_drone_interfaces, msg, EncoderMeasurement),
         "encoder_angle"
     );
 
@@ -266,7 +274,7 @@ void setup() {
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
         "sweep_direction"
-        );
+    );
 }
 
 void loop() {
@@ -277,8 +285,7 @@ void loop() {
     if (myScanner.hasFault()) {
         myScanner.setMode(ScanMode::STOPPED);
         myScanner.update();
-    }
-    else {
+    } else {
         // Execute state logic for active ScanMode
         myScanner.update();
     }
@@ -289,9 +296,22 @@ void loop() {
     // Publish the current scan mode to ROS 2
     rcl_ret_t scan_mode_result = rcl_publish(&scan_mode_publisher, &scan_mode_msg, NULL);
 
-    // Read current position and publish over micro-ROS
-    msg.data = myEncoder.readAngle();
-    rcl_ret_t publish_result = rcl_publish(&publisher, &msg, NULL);
+    // Read current position
+    encoder_msg.angle = myEncoder.readAngle();
+
+    // Get synchronized ROS time in nanoseconds
+    int64_t time_ns = rmw_uros_epoch_nanos();
+
+    // Store whole seconds
+    encoder_msg.timestamp.sec =
+            time_ns / 1000000000;
+
+    // Store remaining nanoseconds
+    encoder_msg.timestamp.nanosec =
+            time_ns % 1000000000;
+
+    // Publish over micro-ROS
+    rcl_ret_t publish_result = rcl_publish(&publisher, &encoder_msg, NULL);
 
     // Get the current target angle from ScanController
     target_angle_msg.data = myScanner.getTargetAngle();
@@ -313,8 +333,7 @@ void loop() {
 
     if (publish_result != RCL_RET_OK) {
         encoder_publish_fail_count++;
-    }
-    else {
+    } else {
         encoder_publish_fail_count = 0;
     }
 
@@ -324,8 +343,7 @@ void loop() {
 
     if (scan_mode_result != RCL_RET_OK) {
         scan_mode_publish_fail_count++;
-    }
-    else {
+    } else {
         scan_mode_publish_fail_count = 0;
     }
 
@@ -335,8 +353,7 @@ void loop() {
 
     if (target_angle_publish_result != RCL_RET_OK) {
         target_angle_publish_fail_count++;
-    }
-    else {
+    } else {
         target_angle_publish_fail_count = 0;
     }
 
@@ -346,8 +363,7 @@ void loop() {
 
     if (fault_publish_result != RCL_RET_OK) {
         fault_publish_fail_count++;
-    }
-    else {
+    } else {
         fault_publish_fail_count = 0;
     }
 
@@ -357,8 +373,7 @@ void loop() {
 
     if (sweep_direction_publish_result != RCL_RET_OK) {
         sweep_direction_publish_fail_count++;
-    }
-    else {
+    } else {
         sweep_direction_publish_fail_count = 0;
     }
 

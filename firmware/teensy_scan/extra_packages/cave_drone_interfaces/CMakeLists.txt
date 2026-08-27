@@ -29,6 +29,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
         "msg/Sf45Measurement.msg"
         "msg/SweepCommand.msg"
+        "msg/EncoderMeasurement.msg"
         DEPENDENCIES builtin_interfaces
 )
 

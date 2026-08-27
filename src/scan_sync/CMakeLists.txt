@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(cave_drone_interfaces)
+project(scan_sync)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,9 +7,27 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(cave_drone_interfaces REQUIRED)
+
+# Build the LiDAR/encoder synchronization node
+add_executable(
+        lidar_encoder_sync
+        src/lidar_encoder_sync.cpp
+)
+
+# Give the node access to its ROS 2 dependencies
+ament_target_dependencies(
+        lidar_encoder_sync
+        rclcpp
+        cave_drone_interfaces
+)
+
+# Install the node so ros2 run can find it
+install(
+        TARGETS lidar_encoder_sync
+        DESTINATION lib/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -22,19 +40,5 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
-
-find_package(builtin_interfaces REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-        "msg/Sf45Measurement.msg"
-        "msg/SweepCommand.msg"
-        "msg/ScanHeadState.msg"
-        "msg/EncoderMeasurement.msg"
-        "msg/SynchronizedMeasurement.msg"
-        "srv/SetAngle.srv"
-        "srv/Sweep.srv"
-        DEPENDENCIES builtin_interfaces
-)
 
 ament_package()
