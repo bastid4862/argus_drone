@@ -21,8 +21,16 @@ public:
     SF45DriverNode() : Node("sf45_node"), serial_port_fd_(-1) {
         publisher_ = this->create_publisher<cave_drone_interfaces::msg::Sf45Measurement>("sf45/measurements", 10);
 
-        // Open the LiDAR serial port
-        init_serial("/dev/ttyACM0");
+        this->declare_parameter<std::string>(
+            "serial_port",
+            "/dev/ttyACM0"
+        );
+
+        // Get the current serial port parameter value
+        std::string serial_port = this->get_parameter("serial_port").as_string();
+
+        // Open the SF45 using that serial port
+        init_serial(serial_port);
 
         // Configure the LiDAR
         configure_sensor();
@@ -43,7 +51,7 @@ public:
 private:
     void init_serial(const std::string &port_name) {
         // Open the serial port
-        serial_port_fd_ = open(port_name.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
+        serial_port_fd_ = open(port_name.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
 
         // Check if opening failed
         if (serial_port_fd_ < 0) {
@@ -65,6 +73,10 @@ private:
         // Use raw binary serial data
         cfmakeraw(&tty);
 
+        // Do not block forever waiting for serial data
+        tty.c_cc[VMIN] = 0;
+        tty.c_cc[VTIME] = 1;
+
         // Set Baud Rate (115200)
         cfsetispeed(&tty, B115200);
         cfsetospeed(&tty, B115200);
@@ -74,6 +86,9 @@ private:
         tty.c_cflag &= ~CSTOPB;
         tty.c_cflag &= ~CSIZE;
         tty.c_cflag |= CS8;
+
+        // Disable hardware flow control
+        tty.c_cflag &= ~CRTSCTS;
 
         // Allow serial reading
         tty.c_cflag |= CREAD | CLOCAL;
@@ -214,8 +229,16 @@ private:
             output_data
         );
 
+        send_command(
+            66,
+            true,
+            {2}
+        );
+
+
         // Stream command 44 continuously
         uint32_t stream_type = 5;
+
 
         std::vector<uint8_t> stream_data = {
             static_cast<uint8_t>(stream_type & 0xFF),
@@ -315,6 +338,7 @@ private:
 
                 msg.distance = distance_m;
                 msg.internal_scan_angle = angle_deg;
+                msg.measurement_status = cave_drone_interfaces::msg::Sf45Measurement::STATUS_UNKNOWN;
                 msg.timestamp = this->now();
 
                 // Send the measurement

@@ -21,14 +21,13 @@
 class ScanHeadBridgeNode : public rclcpp::Node {
 public:
     ScanHeadBridgeNode() : Node("scan_head_bridge") {
-
         //Timer:
         timer_ = this->create_wall_timer(
             std::chrono::milliseconds(50),
             std::bind(&ScanHeadBridgeNode::publish_scan_head_state,
-                this
-                )
-                );
+                      this
+            )
+        );
 
         // Publishers:
 
@@ -90,7 +89,7 @@ public:
                 );
 
         // Receives target angle from Teensy
-        target_angle_sub_ = this -> create_subscription<std_msgs::msg::Float32>(
+        target_angle_sub_ = this->create_subscription<std_msgs::msg::Float32>(
             "/target_angle",
             10,
             std::bind(
@@ -101,7 +100,7 @@ public:
         );
 
         // Receives fault status from Teensy
-        fault_sub_ = this -> create_subscription<std_msgs::msg::Bool>(
+        fault_sub_ = this->create_subscription<std_msgs::msg::Bool>(
             "/fault",
             10,
             std::bind(
@@ -111,7 +110,7 @@ public:
             )
         );
 
-        sweep_direction_sub_ = this -> create_subscription<std_msgs::msg::Int8>(
+        sweep_direction_sub_ = this->create_subscription<std_msgs::msg::Int8>(
             "/sweep_direction",
             10,
             std::bind(
@@ -168,7 +167,7 @@ public:
         );
 
         // SWEEP Service
-        sweep_service_ = this -> create_service<cave_drone_interfaces::srv::Sweep>(
+        sweep_service_ = this->create_service<cave_drone_interfaces::srv::Sweep>(
             "/scan_head/sweep",
             std::bind(
                 &ScanHeadBridgeNode::sweep_service_callback,
@@ -179,12 +178,10 @@ public:
         );
 
         // ScanHeadState Publisher
-        scan_head_state_pub_ = this -> create_publisher<cave_drone_interfaces::msg::ScanHeadState>(
+        scan_head_state_pub_ = this->create_publisher<cave_drone_interfaces::msg::ScanHeadState>(
             "/scan_head/state",
             10
         );
-
-
     }
 
     void publish_set_angle(float angle_value) {
@@ -249,7 +246,7 @@ public:
         msg.sweep_direction = latest_sweep_direction_;
         msg.stamp = this->now();
 
-        scan_head_state_pub_ -> publish(msg);
+        scan_head_state_pub_->publish(msg);
     }
 
 private:
@@ -280,7 +277,7 @@ private:
 
     // Teensy States
     float latest_encoder_angle_ = 0.0f; // stores angle
-    float latest_target_angle_ = 0.0f;  // stores target angle
+    float latest_target_angle_ = 0.0f; // stores target angle
     int8_t latest_scan_mode_ = 0; // stores mode number
     int8_t latest_sweep_direction_ = 1;
     bool latest_fault_ = false;
@@ -325,9 +322,9 @@ private:
     }
 
     void reset_fault_service_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-                                        std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+                                      std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
         // Request has no data
-        (void)request;
+        (void) request;
 
         // Send RESET FAULT command to Teensy
         publish_reset_fault();
@@ -336,22 +333,19 @@ private:
     }
 
     void set_angle_service_callback(const std::shared_ptr<cave_drone_interfaces::srv::SetAngle::Request> request,
-                                        std::shared_ptr<cave_drone_interfaces::srv::SetAngle::Response> response) {
+                                    std::shared_ptr<cave_drone_interfaces::srv::SetAngle::Response> response) {
         // Send requested angle to Teensy
         publish_set_angle(request->angle);
 
         // Tell caller the command was handled
         response->success = true;
         response->message = "Angle command sent";
-
-
     }
 
     void sweep_service_callback(const std::shared_ptr<cave_drone_interfaces::srv::Sweep::Request> request,
-                                    std::shared_ptr<cave_drone_interfaces::srv::Sweep::Response> response) {
-
+                                std::shared_ptr<cave_drone_interfaces::srv::Sweep::Response> response) {
         // Forward the requested sweep settings to the Teensy
-        publish_sweep(request->min_angle, request -> max_angle, request -> speed, request -> direction);
+        publish_sweep(request->min_angle, request->max_angle, request->speed, request->direction);
 
         // Tell the caller the command was sent
         response->success = true;
@@ -360,17 +354,14 @@ private:
 
     void target_angle_callback(const std_msgs::msg::Float32::SharedPtr msg) {
         latest_target_angle_ = msg->data;
-
     }
 
     void fault_callback(const std_msgs::msg::Bool::SharedPtr msg) {
         latest_fault_ = msg->data;
-
     }
 
     void sweep_direction_callback(const std_msgs::msg::Int8::SharedPtr msg) {
         latest_sweep_direction_ = msg->data;
-
     }
 };
 
