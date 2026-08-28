@@ -55,18 +55,21 @@ private:
 
     // Callbacks
     void sync_callback(const cave_drone_interfaces::msg::SynchronizedMeasurement::SharedPtr msg) {
-        // Convert internal scan angle from degrees to radians
-        double internal_rad = msg->internal_scan_angle * M_PI / 180.0;
+        // SF45 internal scan controls the vertical direction
+        double elevation_rad = msg->internal_scan_angle * M_PI / 180.0;
 
-        // Convert external tilt angle from degrees to radians
-        double external_rad = msg->external_angle * M_PI / 180.0;
+        // Encoder 90 degrees means the LiDAR points forward
+        double pan_deg = msg->external_angle - 90.0;
+
+        // Convert the pan angle to radians
+        double pan_rad = pan_deg * M_PI / 180.0;
 
         // Calculate the 3D point
-        double x = msg->distance * std::cos(external_rad) * std::cos(internal_rad);
+        double x = msg->distance * std::cos(elevation_rad) * std::cos(pan_rad);
 
-        double y = msg->distance * std::cos(external_rad) * std::sin(internal_rad);
+        double y = msg->distance * std::cos(elevation_rad) * std::sin(pan_rad);
 
-        double z = msg->distance * std::sin(external_rad);
+        double z = msg->distance * std::sin(elevation_rad);
 
         // Store the new 3D point
         Point3D point;
@@ -117,7 +120,7 @@ private:
             cloud_msg.header.stamp = msg->timestamp;
 
             // Temporary frame name until Phase 13 defines the TF tree
-            cloud_msg.header.frame_id = "lidar_tilt_axis";
+            cloud_msg.header.frame_id = "lidar_pan_base";
 
             // Publish the point cloud
             pointcloud_publisher_->publish(cloud_msg);
@@ -132,7 +135,6 @@ private:
             // Clear the old batch and start collecting the next one
             points_.clear();
         }
-
     }
 };
 
