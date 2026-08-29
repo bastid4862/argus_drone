@@ -141,11 +141,18 @@ void setup() {
         delay(100);
     }
 
-    // Synchronize Teensy time with the micro-ROS Agent
-    rmw_uros_sync_session(1000);
-
     allocator = rcl_get_default_allocator();
+
     rclc_support_init(&support, 0, NULL, &allocator);
+
+    // Synchronize Teensy time after the micro-ROS session exists
+    while (!rmw_uros_epoch_synchronized()) {
+
+        rmw_uros_sync_session(1000);
+
+        delay(100);
+    }
+
     rclc_node_init_default(&node, "teensy_encoder_node", "", &support);
 
     // Publisher initialization
