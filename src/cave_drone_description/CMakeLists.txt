@@ -21,6 +21,10 @@ add_executable(
         lidar_pan_base_tf_broadcaster
         src/lidar_pan_base_tf_broadcaster.cpp
 )
+add_executable(
+        sf45_tf_broadcaster
+        src/sf45_tf_broadcaster.cpp
+)
 
 ament_target_dependencies(
         lidar_pan_tf_broadcaster
@@ -36,12 +40,26 @@ ament_target_dependencies(
         tf2_ros
         geometry_msgs
 )
+ament_target_dependencies(
+        sf45_tf_broadcaster
+        rclcpp
+        tf2
+        tf2_ros
+        geometry_msgs
+)
 
 install(
         TARGETS
         lidar_pan_tf_broadcaster
         lidar_pan_base_tf_broadcaster
+        sf45_tf_broadcaster
         DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+        DIRECTORY
+        launch
+        DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
